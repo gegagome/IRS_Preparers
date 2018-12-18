@@ -1,193 +1,146 @@
-﻿using System;
-using System.Net;
-using System.IO;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace IRS_Preparers
 {
-    public partial class IRS_Preparer_Tool : Form
+    class Preparer : IEquatable<Preparer>, IComparable<Preparer>
     {
-        // results are stored here
-        string _finalStr = Environment.NewLine + "START" + Environment.NewLine;
+        Regex _regex = new Regex(@"");
 
-        PreparerCollection _preparers = new PreparerCollection();
+        public string _businessName, _address, _location, _name, _lastName, _phoneNumber, _title;
+        public int _preparerOrder;
+        static int _count;
 
-
-        public IRS_Preparer_Tool()
+        public Preparer (string preparer)
         {
-            InitializeComponent();
+            string[] lines = Regex.Split(preparer, "\r\n|\r|\n");
 
-            // subscribe to load/complete event
-            _web.DocumentCompleted += new WebBrowserDocumentCompletedEventHandler(GrabDataFromTables);
+            _businessName = FormatString(lines[0]);
+            _address = FormatString(lines[1]);
+            _location = FormatString(lines[2]);
+            _name = FormatName(lines[3]);
+            _lastName = FormatLastName(lines[3]);
+            _phoneNumber = FormatPhoneNumber(lines[4]);
+            _title = FormatString(lines[5]);
 
-            _web.Navigate(WebObject.URL_ADDRESS);
+            _count++;
 
-            // populate combobox
-            _comboBox1.Items.Add("By Business");
-            _comboBox1.Items.Add("By Name");
-            _comboBox1.Items.Add("By Last Name");
-            _comboBox1.Items.Add("By Phone Number");
+            _preparerOrder = _count;
+
+            //if (_count == 2)
+            //{
+            //    Console.WriteLine("business name is: " + _businessName);
+            //    Console.WriteLine("address is: " + _address);
+            //    Console.WriteLine("location is: " + _location);
+            //    Console.WriteLine("name is: " + _name);
+            //    Console.WriteLine("last name is: " + _lastName);
+            //    Console.WriteLine("phone number is: " + _phoneNumber);
+            //    Console.WriteLine("title is: " + _title);
+            //}
         }
 
-        private void BtnGetData_Click(object sender, EventArgs e)
+        // required by IEquatable
+        public bool Equals(Preparer other)
         {
-            string enteredZip = textField.Text;                                 // grab zip code entered
-
-            if (_web.Document != null)
-            {
-                HtmlElement field_zip_code = _web.Document.GetElementById("edit-zip");    // reference zip code text field
-                
-                field_zip_code.SetAttribute("value", enteredZip);                         // set page's zip code to entered one
-                ApplyButton();
-            }
+            if (other == null) return false;
+            return (this._preparerOrder.Equals(other._preparerOrder));
         }
 
-        void GrabDataFromTables (object sender, WebBrowserDocumentCompletedEventArgs e)
+        // required by IComparable
+        public int CompareTo(Preparer comparePreparer)
         {
-            HtmlElementCollection trCollection = _web.Document.GetElementsByTagName("tr");
+            // A null value means that this object is greater.
+            if (comparePreparer == null)
+                return 1;
 
-            if (trCollection != null)
-            {
-                foreach (HtmlElement tr in trCollection)
-                {
-                    HtmlElementCollection tdCollection = tr.GetElementsByTagName("td");
-
-                    // format string
-
-                    _finalStr += Environment.NewLine + tdCollection[1].InnerHtml + Environment.NewLine;
-                    _preparers.AddPreparer(tdCollection[1].InnerHtml);
-
-                    // finalStr += tr.InnerHtml + "\n";
-                }
-            }
             else
-            {
-                Console.WriteLine("Nothing to print");
-            }
-            IsNextPage();
-
-            //finalStr += Environment.NewLine + "END" + Environment.NewLine;
-
-            //_webPage.StoreWebContent(_finalStr);
-            //Console.WriteLine(_collection._collection.Count);
+                return this._preparerOrder.CompareTo(comparePreparer._preparerOrder);
         }
 
-        void ApplyButton ()
+        string FormatString (string str)
         {
-            HtmlElement btnApplyZipCode = _web.Document.GetElementById("edit-submit-pup-efile-index-search");
-
-            if (_web.ReadyState == WebBrowserReadyState.Complete)
+            while (str.EndsWith("<br>"))
             {
-                btnApplyZipCode.InvokeMember("click");
-            } else
-            {
-                Console.WriteLine("Try again");
+                str = str.Substring(0, str.Length - 4);
             }
+
+            if (str.Contains("<br>"))
+            {
+                int pos = str.IndexOf('<');
+                str = str.Remove(pos, 4);
+                str = str.Insert(pos, " ");
+            }
+
+            if (str.Contains("&"))
+            {
+                int pos = str.IndexOf('&');
+                str = str.Remove(pos + 1, 4);
+            }
+
+            if (str.Contains(","))
+            {
+                str = str.Replace(',', ' ');
+            }
+
+
+
+            return str;
         }
 
-        // delete
-        void GrabTableRows (string str)
+        string FormatForCommas(string str)
         {
-            Console.WriteLine("ddd");
-            HtmlElementCollection tableElem = _web.Document.GetElementsByTagName("table");
-            if (tableElem != null)
+            str = FormatString(str);
+
+            if (str.Contains(","))
             {
-                foreach (HtmlElement tr in tableElem)
-                {
-                    if (tr.InnerText != null)
-                    {
-                        Console.WriteLine(tr.InnerText);
-                    }
-                }
+                str = str.Replace(',', ' ');
             }
+
+            return str;
         }
 
-        void IsNextPage ()
+        string FormatPhoneNumber (string str)
         {
-            bool shouldContinueToNextPage = false;
+            str = FormatString(str);
 
-            HtmlElement btnNext = null;
-
-            HtmlElementCollection navCollection = _web.Document.GetElementsByTagName("nav");
-
-            if (navCollection != null)
+            while (str.StartsWith("<a>("))
             {
-                foreach (HtmlElement nav in navCollection)
-                {
-                    //HtmlElementCollection li.GetElementsByTagName
-                    if (nav.GetAttribute("area-labelledby") != null)
-                    {
-                        HtmlElementCollection aTagCollection = nav.GetElementsByTagName("a");
-                        foreach(HtmlElement a in aTagCollection)
-                        {
-                            if (a.GetAttribute("title") == "Go to next page")
-                            {
-                                btnNext = a;
-                                shouldContinueToNextPage = true;
-                            }
-                        }
-                    }
-                }
+                str = str.Substring(4);
             }
 
-            if (btnNext != null)
+            while (str.EndsWith("</a>"))
             {
-                btnNext.InvokeMember("click");
+                str = str.Substring(0, str.Length - 4);
             }
-            else
-            {
-                // store raw file
-                WebObject.StoreWebContent(_finalStr, "raw.txt");
-            }
+
+            str = str.Insert(str.Length - 4, "-");
+            str = str.Insert(3, "-");
+
+            return str;
         }
 
-        // need to delete this but things may break
-        private void Label1_Click(object sender, EventArgs e)
+        string FormatName(string str)
         {
+            str = FormatString(str);
 
+            int i = str.IndexOf(" ");
+            str = str.Substring(0, i);
+
+            return str;
         }
 
-        public int SortByNameAscending (string str1, string str2)
+        string FormatLastName (string str)
         {
-            return str1.CompareTo(str2);
-        }
+            str = FormatString(str);
 
-        private void button1_Click(object sender, EventArgs e)
-        {
-            if (_comboBox1.SelectedItem.ToString() == "By Business")
-            {
-                _preparers.SortCollectionByBusinessName(true);
-            }
-            else if (_comboBox1.SelectedItem.ToString() == "By Name")
-            {
-                _preparers.SortCollectionByName(true);
-            }
-            else if (_comboBox1.SelectedItem.ToString() == "By Last Name")
-            {
-                _preparers.SortCollectionByLastName(true);
-            }
-            else if (_comboBox1.SelectedItem.ToString() == "By Phone Number")
-            {
-                _preparers.SortCollectionByPhoneNumber(true);
-            }
+            int i = str.IndexOf(" ");
+            str = str.Substring(i + 1, str.Length - i - 1);
 
-            string fileName = _comboBox1.SelectedItem.ToString();
-            _preparers.ExportPreparers(fileName + ".csv");
-
-            foreach (var item in _preparers._collection)
-            {
-                Console.WriteLine(Environment.NewLine + "business name is: " + item._businessName);
-                Console.WriteLine("name is: " + item._name);
-                Console.WriteLine("last name is: " + item._lastName);
-                Console.WriteLine("phone number is: " + item._phoneNumber);
-            }
+            return str;
         }
     }
 }
